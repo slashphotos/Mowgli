@@ -55,6 +55,7 @@ static BLADEMOTOR_STATE_e blademotor_eState = BLADEMOTOR_INIT_1;
 bool BLADEMOTOR_bActivated = false;
 uint16_t BLADEMOTOR_u16RPM = 0;
 uint16_t BLADEMOTOR_u16Power = 0;
+uint8_t BLADEMOTOR_u8Error = 0;
 
 static uint8_t blademotor_pu8ReceivedData[BLADEMOTOR_LENGTH_RECEIVED_MSG] = {0};
 static uint8_t blademotor_pu8RqstMessage[BLADEMOTOR_LENGTH_RQST_MSG]  = {0x55, 0xaa, 0x03, 0x20, 0x80, 0x00, 0xA2};
@@ -171,6 +172,8 @@ void  BLADEMOTOR_App(void){
     
     case BLADEMOTOR_RUN:
 
+        debug_printf(" * Blade Message Error packet? %#x \r\n", blademotor_pu8ReceivedData[6] ); 
+        BLADEMOTOR_u8Error =  blademotor_pu8ReceivedData[6];
         /* prepare to receive the message before to launch the command */        
         HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler, blademotor_pu8ReceivedData, BLADEMOTOR_LENGTH_RECEIVED_MSG);
         HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, BLADEMOTOR_LENGTH_RQST_MSG);    

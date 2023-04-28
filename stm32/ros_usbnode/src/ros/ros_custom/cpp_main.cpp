@@ -72,8 +72,8 @@
 
 #define TICKS_PER_M 300.0 // Motor Encoder ticks per meter
 
-// #define WHEEL_BASE  0.325		// The distance between the center of the wheels in meters
-#define WHEEL_BASE 0.285   // The distance between the center of the wheels in meters
+#define WHEEL_BASE  0.325		// The distance between the center of the wheels in meters
+//#define WHEEL_BASE 0.285   // The distance between the center of the wheels in meters
 #define WHEEL_DIAMETER 0.2 // The diameter of the wheels in meters
 
 #define ODOM_NBT_TIME_MS 100
@@ -83,6 +83,8 @@
 
 uint8_t RxBuffer[RxBufferSize];
 struct ringbuffer rb;
+
+
 
 ros::Time last_cmd_vel(0, 0);
 uint32_t last_cmd_vel_age;	 // age of last velocity command
@@ -118,13 +120,10 @@ sensor_msgs::Range bumper_right_msg;
 // IMU
 // external IMU (i2c)
 sensor_msgs::Imu imu_msg;
-sensor_msgs::MagneticField imu_mag_msg;
 // onboard IMU (accelerometer and temp)
 sensor_msgs::Imu imu_onboard_msg;
 // sensor_msgs::Temperature imu_onboard_temp_msg;
 
-// sensor_msgs::MagneticField imu_mag_calibration_msg;
-mowgli::magnetometer imu_mag_calibration_msg;
 
 // mowgli status message
 mowgli::status status_msg;
@@ -199,6 +198,64 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 	} else {
 		PANEL_Set_LED(PANEL_LED_GPS, PANEL_LED_ON);
 	}
+
+	/* led on in function of the current state of openmower*/
+	switch (high_level_status.state & 0b11111) {
+	case mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_AUTONOMOUS:
+		PANEL_Set_LED(PANEL_LED_S1, PANEL_LED_ON);
+		PANEL_Set_LED(PANEL_LED_S2, PANEL_LED_OFF);
+		
+		switch ((high_level_status.state>>mower_msgs::HighLevelStatus::SUBSTATE_SHIFT)){
+			case mower_msgs::HighLevelStatus::SUBSTATE_1:
+				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_ON);
+				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+				main_eOpenmowerStatus = OPENMOWER_STATUS_MOWING;
+			break;
+			case mower_msgs::HighLevelStatus::SUBSTATE_2:
+				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_ON);
+				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+				main_eOpenmowerStatus = OPENMOWER_STATUS_DOCKING;
+			break;
+			case mower_msgs::HighLevelStatus::SUBSTATE_3:
+				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_ON);
+				PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+				main_eOpenmowerStatus = OPENMOWER_STATUS_UNDOCKING;
+			break;
+			case mower_msgs::HighLevelStatus::SUBSTATE_4:
+			default:
+				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+				/* unknow status */
+				main_eOpenmowerStatus = OPENMOWER_STATUS_MAX_STATUS;
+			break;
+		} 
+	break;
+
+	case mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_RECORDING:
+		PANEL_Set_LED(PANEL_LED_S1, PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_S2, PANEL_LED_ON);
+		main_eOpenmowerStatus = OPENMOWER_STATUS_RECORD;
+	break;
+
+	case mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_IDLE:
+	default:
+		PANEL_Set_LED(PANEL_LED_S1, PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_S2, PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+		main_eOpenmowerStatus = OPENMOWER_STATUS_IDLE;
+	break;
+	}
 }
 /*
  * receive and parse cmd_vel messages
@@ -250,7 +307,6 @@ extern "C" void CommandVelocityMessageCb(const geometry_msgs::Twist &msg)
 
 uint8_t CDC_DataReceivedHandler(const uint8_t *Buf, uint32_t len)
 {
-
 	ringbuffer_put(&rb, Buf, len);
 	return CDC_RX_DATA_HANDLED;
 }
@@ -462,7 +518,7 @@ extern "C" void broadcast_handler()
 		status_msg.emergency_stopbutton_triggered = Emergency_StopButtonYellow() || Emergency_StopButtonWhite();
 		/* not used anymore*/
 		status_msg.left_encoder_ticks = DRIVEMOTOR_u32ErrorCnt;
-		status_msg.right_encoder_ticks = 0;
+		status_msg.right_encoder_ticks = BLADEMOTOR_u8Error;
 		status_msg.v_charge = charge_voltage;
 		status_msg.i_charge = current;
 		status_msg.v_battery = battery_voltage;

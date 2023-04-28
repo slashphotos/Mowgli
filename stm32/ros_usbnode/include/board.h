@@ -18,11 +18,11 @@ extern "C"
  * BOARD SELECTION
  * the specific board setting are set a the end of this file
  ********************************************************************************/
- #define BOARD_YARDFORCE500 1
-//#define BOARD_LUV1000RI 1
+ //#define BOARD_YARDFORCE500 1
+#define BOARD_LUV1000RI 1
 
-#define IMU_ALTIMU 
-//#define IMU_WT901 
+//#define IMU_ALTIMU 
+#define IMU_WT901 
 
 /* definition type don't modify */
 #define DEBUG_TYPE_NONE 0
@@ -52,7 +52,8 @@ extern "C"
 #define DEBUG_TYPE 0
 
 #define OPTION_ULTRASONIC 1
-#define OPTION_BUMPER 0
+#define OPTION_BUMPER 1
+#define ROS_PUBLISH_MOWGLI1
 #else
 
 #error "No board selection"
@@ -64,7 +65,7 @@ extern "C"
 // #define I_DONT_NEED_MY_FINGERS              1      // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
 
 /// nominal max charge current is 1.0 Amp
-#define MAX_CHARGE_CURRENT 1.0f
+#define MAX_CHARGE_CURRENT 1.5f
 /// limite voltag when switching in 150mA mode
 #define LIMIT_VOLTAGE_150MA 29.0f
 /// Max voltage allowed 29.4

@@ -69,6 +69,8 @@ static char master_tx_buffer[255];
 uint8_t do_chirp_duration_counter;
 uint8_t do_chirp = 0;
 
+openmower_status_e main_eOpenmowerStatus = OPENMOWER_STATUS_IDLE;
+
 UART_HandleTypeDef MASTER_USART_Handler; // UART  Handle
 
 // Drive Motors DMA
