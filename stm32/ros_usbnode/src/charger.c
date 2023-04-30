@@ -3,7 +3,7 @@
 * Filename              :   charger.c
 * Author                :   Nekraus
 * Origin Date           :   01/04/2023
-* Version               :   1.0.0
+* Version               :   1.1.0
 
 *****************************************************************************/
 /** \file charger.c
@@ -188,7 +188,7 @@ void ChargeController(void)
 
     case CHARGER_STATE_CHARGING_CC:
         // cap charge current at 1.5 Amps
-        if ((current > MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val > 50))
+        if ((current > MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val > 39))
         {
             chargecontrol_pwm_val--;
         }
@@ -209,13 +209,13 @@ void ChargeController(void)
         {
           chargecontrol_pwm_val++;
         }            
-        if ((charge_voltage > (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val > 50))
+        if ((charge_voltage > (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val > 39))
         {
           chargecontrol_pwm_val--;
         }
 
         /* the current is limited to 150ma */
-        if ((current > (MAX_CHARGE_CURRENT/10)))
+        if ((current > (MAX_CHARGE_CURRENT/10)) && (chargecontrol_pwm_val > 39))
         {
             chargecontrol_pwm_val--;
         }

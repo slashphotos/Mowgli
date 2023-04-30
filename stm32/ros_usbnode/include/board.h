@@ -22,7 +22,7 @@ extern "C"
 #define BOARD_LUV1000RI 1
 
 //#define IMU_ALTIMU 
-#define IMU_WT901 
+#define IMU_WT901 1
 
 /* definition type don't modify */
 #define DEBUG_TYPE_NONE 0
