@@ -7,13 +7,12 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
-  * All rights reserved.</center></h2>
+  * Copyright (c) 2023 STMicroelectronics.
+  * All rights reserved.
   *
-  * This software component is licensed by ST under Ultimate Liberty license
-  * SLA0044, the "License"; You may not use this file except in compliance with
-  * the License. You may obtain a copy of the License at:
-  *                             www.st.com/SLA0044
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
   */
@@ -48,45 +47,10 @@
   * @brief Defines.
   * @{
   */
-/* USER CODE BEGIN EXPORTED_DEFINES */
 /* Define size for the receive and transmit buffer over CDC */
-/* Powers of 2 are a good choice so that modulo operations become faster mask operations */
-/* If you overwrite the CDC_DataReceivedHandler and always process the data, APP_RX_DATA_SIZE should be set to 0 to save RAM */
 #define APP_RX_DATA_SIZE  1024
-#define APP_TX_DATA_SIZE  8192
-#define CDC_RX_DATA_HANDLED 1
-#define CDC_RX_DATA_NOTHANDLED 0
-
-#ifndef USE_USB_FS
-// if you are using USB_HS uncomment the following define
-// it is here because ST forgot to define it for USB FS
-#define USE_USB_FS 1
-#endif
-
-// define USB_FS_HS_PERIPHERAL if your device has a 'HS' peripheral but runs in FS mode
-//#define USB_FS_HS_PERIPHERAL
-#ifdef USB_FS_HS_PERIPHERAL
-#undef USE_USB_FS
-#undef CDC_DATA_HS_MAX_PACKET_SIZE
-#define CDC_DATA_HS_MAX_PACKET_SIZE CDC_DATA_FS_MAX_PACKET_SIZE
-#endif
-
-// define CDC_REENTRANT if you use CDC_Transmit_xx in a reentrant way, i.e. from
-// nested interrupts or from both main context and interrupt context
-// if defined, interrupts will be disabled while copying data into internal buffer (critical section)
-//#define CDC_REENTRANT
-#ifdef CDC_REENTRANT
-    #define CDC_ENTER_CRITICAL_SECTION()   \
-       uint32_t PriMsk;                    \
-       PriMsk = __get_PRIMASK();           \
-       __set_PRIMASK(1);
-
-    #define CDC_EXIT_CRITICAL_SECTION()    \
-       __set_PRIMASK(PriMsk);
-#else
-    #define CDC_ENTER_CRITICAL_SECTION()
-    #define CDC_EXIT_CRITICAL_SECTION()
-#endif
+#define APP_TX_DATA_SIZE  1024
+/* USER CODE BEGIN EXPORTED_DEFINES */
 
 /* USER CODE END EXPORTED_DEFINES */
 
@@ -113,11 +77,7 @@
   */
 
 /* USER CODE BEGIN EXPORTED_MACRO */
-#ifdef USE_USB_FS
-    _Static_assert(APP_TX_DATA_SIZE >= CDC_DATA_FS_MAX_PACKET_SIZE, "tx buffer should hold at least 1 full usb packet");
-#else
-    _Static_assert(APP_TX_DATA_SIZE >= CDC_DATA_HS_MAX_PACKET_SIZE, "tx buffer should hold at least 1 full usb packet");
-#endif
+
 /* USER CODE END EXPORTED_MACRO */
 
 /**
@@ -130,12 +90,7 @@
   */
 
 /** CDC Interface callback. */
-#ifdef USE_USB_FS
-    extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
-#else
-    extern USBD_CDC_ItfTypeDef USBD_Interface_fops_HS;
-#endif
-
+extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
 
@@ -150,10 +105,10 @@
   * @{
   */
 
-uint8_t CDC_Transmit(const void* Buf, uint32_t Len);
-uint8_t CDC_TransmitTimed(const void* Buf, uint32_t Len, uint32_t TimeoutMs);
+uint8_t CDC_Transmit_FS(const void* Buf, uint32_t Len);
+uint8_t CDC_TransmitTimed_FS(const void* Buf, uint32_t Len, uint32_t TimeoutMs);
 
-void CDC_ResumeTransmit(void);
+void CDC_ResumeTransmit_FS(void);
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
 uint8_t CDC_IsBusy();
@@ -180,9 +135,9 @@ uint8_t CDC_IsComportOpen();
  * @param  string: 0-terminated C-string to send
  * @retval USBD_OK if all operations are OK else USBD_FAIL or USBD_BUSY
  */
-static inline uint8_t CDC_TransmitString(const char *string)
+static inline uint8_t CDC_TransmitString_FS(const char *string)
 {
-    return CDC_Transmit(string, strlen(string));
+    return CDC_Transmit_FS(string, strlen(string));
 }
 
 /* USER CODE END EXPORTED_FUNCTIONS */
