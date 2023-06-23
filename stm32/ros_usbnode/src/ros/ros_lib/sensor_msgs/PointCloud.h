@@ -22,14 +22,14 @@ namespace sensor_msgs
       _points_type st_points;
       _points_type * points;
       uint32_t channels_length;
-      typedef sensor_msgs::ChannelFloat32 _channels_type;
-      _channels_type st_channels;
-      _channels_type * channels;
+      typedef sensor_msgs::ChannelFloat32 _Streams_type;
+      _Streams_type st_Streams;
+      _Streams_type * channels;
 
     PointCloud():
       header(),
       points_length(0), st_points(), points(nullptr),
-      channels_length(0), st_channels(), channels(nullptr)
+      channels_length(0), st_Streams(), channels(nullptr)
     {
     }
 
@@ -81,8 +81,8 @@ namespace sensor_msgs
         this->channels = (sensor_msgs::ChannelFloat32*)realloc(this->channels, channels_lengthT * sizeof(sensor_msgs::ChannelFloat32));
       channels_length = channels_lengthT;
       for( uint32_t i = 0; i < channels_length; i++){
-      offset += this->st_channels.deserialize(inbuffer + offset);
-        memcpy( &(this->channels[i]), &(this->st_channels), sizeof(sensor_msgs::ChannelFloat32));
+      offset += this->st_Streams.deserialize(inbuffer + offset);
+        memcpy( &(this->channels[i]), &(this->st_Streams), sizeof(sensor_msgs::ChannelFloat32));
       }
      return offset;
     }

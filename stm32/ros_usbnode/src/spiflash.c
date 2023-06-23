@@ -13,7 +13,7 @@
   */
 
 #include "spiflash.h"
-#include "stm32f1xx_hal.h"
+#include "stm32f4xx_hal.h"
 #include "board.h"
 #include "main.h"
 #include "soft_i2c.h"
@@ -47,8 +47,8 @@ void SPI3_Init()
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     
     // Disable JTAG only to free PA15, PB3* and PB4. SWD remains active
-    RCC->APB2ENR |= RCC_APB2ENR_AFIOEN; // Enable A.F. clock
-    __HAL_AFIO_REMAP_SWJ_NOJTAG();
+   // RCC->APB2ENR |= RCC_APB2ENR_AFIOEN; // Enable A.F. clock
+    //__HAL_AFIO_REMAP_SWJ_NOJTAG();
 
     __HAL_RCC_SPI3_CLK_ENABLE();
     FLASH_SPI_CLK_ENABLE();
@@ -101,7 +101,7 @@ void SPI3_DeInit()
     HAL_GPIO_DeInit(FLASH_SPICS_PORT,FLASH_nCS_PIN);
 
    // reactivate JTAG
-   __HAL_AFIO_REMAP_SWJ_ENABLE();
+   //__HAL_AFIO_REMAP_SWJ_ENABLE();
 }
 
 uint8_t FLASH25D_Busy(void)

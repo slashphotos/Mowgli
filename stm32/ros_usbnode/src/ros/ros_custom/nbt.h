@@ -8,7 +8,7 @@
 #ifndef NBT_H_
 #define NBT_H_
 #include "main.h"
-#include "stm32f1xx_hal.h"
+#include "stm32f4xx_hal.h"
 #include <stdbool.h>
 
 #ifdef __cplusplus

@@ -22,9 +22,9 @@
 #include "emergency.h"
 #include "drivemotor.h"
 #include "blademotor.h"
-#include "ultrasonic_sensor.h"
+//#include "ultrasonic_sensor.h"
 #include "spiflash.h"
-#include "stm32f1xx_hal.h"
+#include "stm32f4xx_hal.h"
 #include "ringbuffer.h"
 #include "ros.h"
 #include "ros/time.h"
@@ -214,21 +214,27 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_ON);
 				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
 				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+#if PANEL_TYPE==PANEL_TYPE_YARDFORCE_LUV1000RI	
 				PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+#endif
 				main_eOpenmowerStatus = OPENMOWER_STATUS_MOWING;
 			break;
 			case mower_msgs::HighLevelStatus::SUBSTATE_2:
 				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
 				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_ON);
 				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+#if PANEL_TYPE==PANEL_TYPE_YARDFORCE_LUV1000RI	
 				PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+#endif
 				main_eOpenmowerStatus = OPENMOWER_STATUS_DOCKING;
 			break;
 			case mower_msgs::HighLevelStatus::SUBSTATE_3:
 				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
 				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
 				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_ON);
+#if PANEL_TYPE==PANEL_TYPE_YARDFORCE_LUV1000RI	
 				PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+#endif
 				main_eOpenmowerStatus = OPENMOWER_STATUS_UNDOCKING;
 			break;
 			case mower_msgs::HighLevelStatus::SUBSTATE_4:
@@ -236,7 +242,9 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
 				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
 				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+#if PANEL_TYPE==PANEL_TYPE_YARDFORCE_LUV1000RI	
 				PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+#endif
 				/* unknow status */
 				main_eOpenmowerStatus = OPENMOWER_STATUS_MAX_STATUS;
 			break;
@@ -256,7 +264,9 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 		PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
 		PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
 		PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
-		PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+#if PANEL_TYPE==PANEL_TYPE_YARDFORCE_LUV1000RI	
+				PANEL_Set_LED(PANEL_LED_10H, PANEL_LED_OFF);
+#endif
 		main_eOpenmowerStatus = OPENMOWER_STATUS_IDLE;
 	break;
 	}
@@ -345,7 +355,7 @@ extern "C" void CommandVelocityMessageCb(const geometry_msgs::Twist &msg)
 uint8_t CDC_DataReceivedHandler(const uint8_t *Buf, uint32_t len)
 {
 	ringbuffer_put(&rb, Buf, len);
-	return CDC_RX_DATA_HANDLED;
+	return 1;
 }
 
 /*
@@ -377,9 +387,9 @@ extern "C" void motors_handler()
 {
 	if (NBT_handler(&motors_nbt))
 	{
-		if (Emergency_State())
+		if (EMERGENCY_State())
 		{
-			DRIVEMOTOR_SetSpeed(0, 0, 0, 0);
+			DRIVEMOTOR_SetSpeed(0, 0);
 			BLADEMOTOR_Set(0);
 		}
 		else
@@ -388,11 +398,11 @@ extern "C" void motors_handler()
 			last_cmd_vel_age = nh.now().sec - last_cmd_vel.sec;
 			if (last_cmd_vel_age > 1)
 			{
-				DRIVEMOTOR_SetSpeed(0, 0, left_dir, right_dir);
+				DRIVEMOTOR_SetSpeed(0, 0);
 			}
 			else
 			{
-				DRIVEMOTOR_SetSpeed(left_speed, right_speed, left_dir, right_dir);
+				DRIVEMOTOR_SetSpeed(left_speed, right_speed);
 			}
 
 			if ( last_cmd_vel_age > 25)
@@ -545,7 +555,7 @@ extern "C" void broadcast_handler()
 		// mowgli/status Message
 		////////////////////////////////////////
 		status_msg.stamp = nh.now();
-		status_msg.rain_detected = RAIN_Sense();
+		status_msg.rain_detected = 0;//RAIN_Sense();
 		status_msg.emergency_status = Emergency_State();
 		status_msg.emergency_left_stop = HALLSTOP_Left_Sense();
 		status_msg.emergency_right_stop = HALLSTOP_Right_Sense();
@@ -579,8 +589,8 @@ extern "C" void broadcast_handler()
 
 		om_mower_status_msg.stamp = nh.now();
 		om_mower_status_msg.mower_status = mower_msgs::Status::MOWER_STATUS_OK;
-		om_mower_status_msg.rain_detected = RAIN_Sense();
-		om_mower_status_msg.emergency = Emergency_State();
+		om_mower_status_msg.rain_detected = 0;//RAIN_Sense();
+		om_mower_status_msg.emergency = EMERGENCY_State();
 		om_mower_status_msg.v_charge = chargerInputVoltage;
 		om_mower_status_msg.charge_current = current;
 		om_mower_status_msg.v_battery = battery_voltage;

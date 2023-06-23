@@ -1,28 +1,18 @@
-/****************************************************************************
-* Title                 :   drive motor module
-* Filename              :   drivemotor.c
-* Author                :   Nekraus
-* Origin Date           :   18/08/2022
-* Version               :   1.0.0
-
-*****************************************************************************/
-/** \file drivemotor.c
-*  \brief drive motor module
-*
-*/
 /******************************************************************************
 * Includes
 *******************************************************************************/
 #include <string.h>
+#include <stdint.h>
+#include <stdio.h>
+
 #include <stdlib.h>
-#include "stm32f1xx_hal.h"
-#include "stm32f1xx_hal_uart.h"
+#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_uart.h"
 
 #include "main.h"
-#include "ros/ros_custom/cpp_main.h"
-#include "board.h"
-#include "adc.h"
+#include "usart.h"
 #include "drivemotor.h" 
+
 
 /******************************************************************************
 * Module Preprocessor Constants
@@ -41,8 +31,7 @@ typedef enum {
     DRIVEMOTOR_INIT_1,
     DRIVEMOTOR_INIT_2,
     DRIVEMOTOR_RUN,
-    DRIVEMOTOR_BACKWARD,
-    DRIVEMOTOR_WAIT
+    DRIVEMOTOR_BACKWARD
 }DRIVEMOTOR_STATE_e;
 
 
@@ -69,10 +58,7 @@ typedef struct
 /******************************************************************************
 * Module Variable Definitions
 *******************************************************************************/
-UART_HandleTypeDef DRIVEMOTORS_USART_Handler; // UART  Handle
 
-DMA_HandleTypeDef hdma_usart2_rx;
-DMA_HandleTypeDef hdma_usart2_tx;
 
 static DRIVEMOTOR_STATE_e drivemotor_eState = DRIVEMOTOR_INIT_1;
 static rx_status_e drivemotors_eRxFlag = RX_WAIT;
@@ -123,93 +109,12 @@ __STATIC_INLINE  void drivemotor_prepareMsg(uint8_t left_speed, uint8_t right_sp
 /// @brief Initialize STM32 hardware UART to control drive motors
 /// @param  
 void DRIVEMOTOR_Init(void){
-        PAC5210RESET_GPIO_CLK_ENABLE();
-    GPIO_InitTypeDef GPIO_InitStruct;
-    GPIO_InitStruct.Pin = PAC5210RESET_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(PAC5210RESET_GPIO_PORT, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(PAC5210RESET_GPIO_PORT, PAC5210RESET_PIN, 0);     // take Drive Motor PAC out of reset if LOW
 
 
-    // PD7 (->PAC5210 PC4), PD8 (->PAC5210 PC3)
-     __HAL_RCC_GPIOD_CLK_ENABLE();    
-    GPIO_InitStruct.Pin = GPIO_PIN_7| GPIO_PIN_8;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7 | GPIO_PIN_8 , 1);
+   HAL_GPIO_WritePin(Driver_Motor_Enable_GPIO_Port, Driver_Motor_Enable_Pin, 0);     // take Drive Motor PAC out of reset if LOW
+   HAL_GPIO_WritePin(Driver_Motor_EnableD7_GPIO_Port, Driver_Motor_EnableD7_Pin  , 1);
+   HAL_GPIO_WritePin(Driver_Motor_EnableD8_GPIO_Port, Driver_Motor_EnableD8_Pin , 1);
 
-    // enable port and usart clocks
-    DRIVEMOTORS_USART_GPIO_CLK_ENABLE();
-    DRIVEMOTORS_USART_USART_CLK_ENABLE();
-    
-    // RX
-    GPIO_InitStruct.Pin = DRIVEMOTORS_USART_RX_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(DRIVEMOTORS_USART_RX_PORT, &GPIO_InitStruct);
-
-    // TX
-    GPIO_InitStruct.Pin = DRIVEMOTORS_USART_TX_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    // GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(DRIVEMOTORS_USART_TX_PORT, &GPIO_InitStruct);
-
-    // Alternate Pin Set ?
-    __HAL_AFIO_REMAP_USART2_ENABLE();
-
-    DRIVEMOTORS_USART_Handler.Instance = DRIVEMOTORS_USART_INSTANCE;// USART2
-    DRIVEMOTORS_USART_Handler.Init.BaudRate = 115200;               // Baud rate
-    DRIVEMOTORS_USART_Handler.Init.WordLength = UART_WORDLENGTH_8B; // The word is  8  Bit format
-    DRIVEMOTORS_USART_Handler.Init.StopBits = USART_STOPBITS_1;     // A stop bit
-    DRIVEMOTORS_USART_Handler.Init.Parity = UART_PARITY_NONE;       // No parity bit
-    DRIVEMOTORS_USART_Handler.Init.HwFlowCtl = UART_HWCONTROL_NONE; // No hardware flow control
-    DRIVEMOTORS_USART_Handler.Init.Mode = USART_MODE_TX_RX;         // Transceiver mode
-    
-    HAL_UART_Init(&DRIVEMOTORS_USART_Handler); 
-
-    /* USART2 DMA Init */
-    /* USART2_RX Init */    
-    hdma_usart2_rx.Instance = DMA1_Channel6;
-    hdma_usart2_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma_usart2_rx.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_usart2_rx.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_usart2_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_usart2_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-    hdma_usart2_rx.Init.Mode = DMA_NORMAL;
-    hdma_usart2_rx.Init.Priority = DMA_PRIORITY_LOW;
-    if (HAL_DMA_Init(&hdma_usart2_rx) != HAL_OK)
-    {
-      Error_Handler();
-    }
-
-    __HAL_LINKDMA(&DRIVEMOTORS_USART_Handler,hdmarx,hdma_usart2_rx);
-
-    // USART2_TX Init */
-    hdma_usart2_tx.Instance = DMA1_Channel7;
-    hdma_usart2_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
-    hdma_usart2_tx.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_usart2_tx.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_usart2_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_usart2_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-    hdma_usart2_tx.Init.Mode = DMA_NORMAL;
-    hdma_usart2_tx.Init.Priority = DMA_PRIORITY_HIGH;
-    if (HAL_DMA_Init(&hdma_usart2_tx) != HAL_OK)
-    {
-      Error_Handler();
-    }
-    __HAL_LINKDMA(&DRIVEMOTORS_USART_Handler,hdmatx,hdma_usart2_tx);
-
-    // enable IRQ      
-    HAL_NVIC_SetPriority(DRIVEMOTORS_USART_IRQ, 0, 0);
-    HAL_NVIC_EnableIRQ(DRIVEMOTORS_USART_IRQ);   
-
-    __HAL_UART_ENABLE_IT(&DRIVEMOTORS_USART_Handler, UART_IT_TC);
 
     right_encoder_ticks = 0;
     left_encoder_ticks = 0;
@@ -223,7 +128,10 @@ void DRIVEMOTOR_Init(void){
 
 /// @brief handle drive motor messages
 /// @param  
-void DRIVEMOTOR_App_10ms(void){
+void DRIVEMOTOR_Run(void){
+
+    //Parse Driver Incoming data
+    DRIVEMOTOR_Receive();
 
     static uint32_t l_u32Timestamp = 0;
 
@@ -231,80 +139,22 @@ void DRIVEMOTOR_App_10ms(void){
     {
         case DRIVEMOTOR_INIT_1:
 
-            HAL_UART_Transmit_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)drivemotor_pcu8InitMsg, DRIVEMOTOR_LENGTH_INIT_MSG);
+            HAL_UART_Transmit_DMA(&huart2, (uint8_t*)drivemotor_pcu8InitMsg, DRIVEMOTOR_LENGTH_INIT_MSG);
             drivemotor_eState = DRIVEMOTOR_RUN;
-            debug_printf(" * Drive Motor Controller initialized\r\n");        
+            logSerial("Drive Motor Controller initialized\r\n");        
             break;
         
         case DRIVEMOTOR_RUN:
             
-            /* prepare to receive the message before to launch the command */
-            HAL_UART_Receive_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)&drivemotor_psReceivedData, sizeof(DRIVEMOTORS_data_t));
-
             drivemotor_prepareMsg(left_speed_req, right_speed_req, left_dir_req, right_dir_req);
             /* error State*/
             if(drivemotor_psReceivedData.u8_error != 0){
                 drivemotor_prepareMsg(0,0,0,0);
                 DRIVEMOTOR_u32ErrorCnt++;
+                logSerial("Drive Motor Error\r\n"); 
             }            
 
-            /* hit an obstacle  and move forward!!!!!! stop and wait*/
-            /* todo add also accelerometer detection*/
-            if((HALLSTOP_Left_Sense() || HALLSTOP_Right_Sense()) \
-                && (left_dir_req || right_dir_req)  ){
-                
-                switch (main_eOpenmowerStatus){
-                    case OPENMOWER_STATUS_MOWING:
-                        /*hit something goes back */
-                        drivemotor_eState = DRIVEMOTOR_BACKWARD;
-                        l_u32Timestamp = HAL_GetTick();
-			        break;
-                    case OPENMOWER_STATUS_DOCKING:
-                        /* Get voltage from dock, stop the mower*/
-                        if(chargerInputVoltage > MIN_DOCKED_VOLTAGE){
-                            drivemotor_prepareMsg(0,0,0,0);
-                        }
-                        else{ /*hit something goes back */
-                            drivemotor_eState = DRIVEMOTOR_BACKWARD;
-                            l_u32Timestamp = HAL_GetTick();
-                        }
-
-			        break;
-                    case OPENMOWER_STATUS_UNDOCKING:
-                    case OPENMOWER_STATUS_IDLE:
-                    case OPENMOWER_STATUS_RECORD:
-                    default:
-                        /* nothing to do in these modes*/
-                    break;
-                }
-            }
-
-            HAL_UART_Transmit_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG);
-
-            break;
-
-        case DRIVEMOTOR_BACKWARD:
-            /* prepare to receive the message before to launch the command */
-            HAL_UART_Receive_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)&drivemotor_psReceivedData, sizeof(DRIVEMOTORS_data_t));
-            drivemotor_prepareMsg(100,100,0,0); /* set to -0.33m/s  */
-            HAL_UART_Transmit_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG);
-
-            if( (HAL_GetTick() - l_u32Timestamp) > 2000){
-                drivemotor_eState = DRIVEMOTOR_WAIT;
-                l_u32Timestamp = HAL_GetTick();
-            }
-
-            break;
-
-        case DRIVEMOTOR_WAIT:
-            /* prepare to receive the message before to launch the command */
-            HAL_UART_Receive_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)&drivemotor_psReceivedData, sizeof(DRIVEMOTORS_data_t));
-            drivemotor_prepareMsg(0,0,0,0);
-            HAL_UART_Transmit_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG);
-
-            if( (HAL_GetTick() - l_u32Timestamp) > 1000){
-                drivemotor_eState = DRIVEMOTOR_RUN;
-            }
+            HAL_UART_Transmit_DMA(&huart2, (uint8_t*)drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG);
 
             break;
         
@@ -312,33 +162,19 @@ void DRIVEMOTOR_App_10ms(void){
             break;
     }
 
-    /* TODO error management */
-    switch (drivemotors_eRxFlag)
-    {
-        case RX_VALID:
-            break;
-        
-        case RX_WAIT:
-            
-            /* todo check for timeout */
-
-            break;
-
-        case RX_CRC_ERROR:
-        case RX_INVALID_ERROR:
-        case RX_TIMEOUT_ERROR:
-        default:
-            /* inform for error */
-            break;
-    }
 }
 
 /// @brief Decode received drive motor messages 
 /// @param  
-void DRIVEMOTOR_App_Rx(void){
+void DRIVEMOTOR_Receive(void){
     if(drivemotors_eRxFlag == RX_VALID )
     {
             /* decode */
+            /*
+            char buffer[50];
+            sprintf(buffer, "Driver Motor Response -  Error:%d Direction:%d Power:%d\n", drivemotor_psReceivedData.u8_error, drivemotor_psReceivedData.u8_direction, drivemotor_psReceivedData.u8_left_power);
+            logSerial((uint8_t *)buffer);
+            */
             uint8_t direction = drivemotor_psReceivedData.u8_direction;
             // we need to adjust for direction (+/-) !
             if ((direction & 0xc0) == 0xc0)
@@ -366,7 +202,7 @@ void DRIVEMOTOR_App_Rx(void){
                 right_direction = 0;
             }    
 
-                left_encoder_val = drivemotor_psReceivedData.u16_left_ticks;
+            left_encoder_val = drivemotor_psReceivedData.u16_left_ticks;
             right_encoder_val = drivemotor_psReceivedData.u16_right_ticks;
     
             // power consumption
@@ -399,34 +235,53 @@ void DRIVEMOTOR_App_Rx(void){
             prev_right_wheel_speed_val = right_wheel_speed_val;
             prev_right_direction = right_direction;
 
-            wheelTicks_handler(left_direction, right_direction, left_encoder_ticks, right_encoder_ticks, left_wheel_speed_val, right_wheel_speed_val);
             
-            drivemotors_eRxFlag = RX_WAIT;                    // ready for next message      
+            drivemotors_eRxFlag = RX_WAIT;  // ready for next message      
 
     }
 }
 
 
-/// @brief Set drive motor speeds
-/// @param left_speed left motor speed byte
-/// @param right_speed right motor speed byte
-/// @param left_dir left motor direction bit
-/// @param right_dir  left motor direction bit
-void DRIVEMOTOR_SetSpeed(uint8_t left_speed, uint8_t right_speed, uint8_t left_dir, uint8_t right_dir)
+
+void DRIVEMOTOR_SetSpeed(float left_mps, float right_mps)
 {
-    left_speed_req  = left_speed;
-    right_speed_req = right_speed;
-    left_dir_req    = left_dir;
-    right_dir_req   = right_dir;
+    
+	// cap left motor speed to MAX_MPS
+	if (left_mps > MAX_MPS)
+	{
+		left_mps = MAX_MPS;
+	}
+	else if (left_mps < -1. * MAX_MPS)
+	{
+		left_mps = -1. * MAX_MPS;
+	}
+	// cap right motor speed to MAX_MPS
+	if (right_mps > MAX_MPS)
+	{
+		right_mps = MAX_MPS;
+	}
+	else if (right_mps < -1. * MAX_MPS)
+	{
+		right_mps = -1. * MAX_MPS;
+	}
+
+    left_speed_req  = abs(left_mps * PWM_PER_MPS);
+    right_speed_req = abs(right_mps * PWM_PER_MPS);
+    left_dir_req    = (left_mps >= 0) ? 1 : 0;
+    right_dir_req   = (right_mps >= 0) ? 1 : 0;
 }
 
 
 
 /// @brief drive motor receive interrupt handler
 /// @param  
-void DRIVEMOTOR_ReceiveIT(void)
+void DRIVEMOTOR_UART_RxCallback(void)
 {    
-    /* decode the frame */
+    
+    //Receive data
+    HAL_UART_Receive_DMA(&huart2, (uint8_t*)&drivemotor_psReceivedData, sizeof(DRIVEMOTORS_data_t));
+
+    //validate data by comparing preable and running CRC
     if(memcmp(drivemotor_pcu8Preamble,(uint8_t*)&drivemotor_psReceivedData,5) == 0){
         uint8_t l_u8crc = crcCalc((uint8_t*)&drivemotor_psReceivedData,DRIVEMOTOR_LENGTH_RECEIVED_MSG-1);
         if(drivemotor_psReceivedData.u8_CRC == l_u8crc )
@@ -435,12 +290,14 @@ void DRIVEMOTOR_ReceiveIT(void)
         }
         else
         {
-            drivemotors_eRxFlag = RX_CRC_ERROR; 
+            drivemotors_eRxFlag = RX_CRC_ERROR;
+            logSerial("Drive Motor RX CRC Error\n");  
         }
     }
     else
     {
          drivemotors_eRxFlag = RX_INVALID_ERROR;
+         logSerial("Drive Motor RX Error\n");
     }  
 }
 
@@ -483,3 +340,4 @@ __STATIC_INLINE  void  drivemotor_prepareMsg(uint8_t left_speed, uint8_t right_s
     drivemotor_pu8RqstMessage[10] = 0;
     drivemotor_pu8RqstMessage[11] = crcCalc(drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG-1);
 }
+

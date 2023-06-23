@@ -1,5 +1,5 @@
-#ifndef _ROS_sensor_msgs_ChannelFloat32_h
-#define _ROS_sensor_msgs_ChannelFloat32_h
+#ifndef _ROS_sensor_msgs_StreamFloat32_h
+#define _ROS_sensor_msgs_StreamFloat32_h
 
 #include <stdint.h>
 #include <string.h>

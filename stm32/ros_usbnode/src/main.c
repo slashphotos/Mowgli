@@ -14,25 +14,25 @@
  ******************************************************************************
  */
 
+#include "board.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <math.h>
 #include <string.h>
-#include "stm32f1xx_hal.h"
-#include "stm32f1xx_hal_uart.h"
-#include "stm32f1xx_hal_adc.h"
+#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_uart.h"
+#include "stm32f4xx_hal_adc.h"
 #include "main.h"
 // stm32 custom
-#include "board.h"
-#include "panel.h"
 #include "panel.h"
 #include "blademotor.h"
 #include "drivemotor.h"
 #include "emergency.h"
 #include "blademotor.h"
 #include "drivemotor.h"
-#include "ultrasonic_sensor.h"
+#include "tim.h"
+//#include "ultrasonic_sensor.h"
 #include "perimeter.h"
 #include "adc.h"
 #include "charger.h"
@@ -43,13 +43,18 @@
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "nbt.h"
+#include "dma.h"
+#include "wwdg.h"
 
 // ros
 #include "cpp_main.h"
 #include "ringbuffer.h"
 
-static void WATCHDOG_vInit(void);
-static void WATCHDOG_Refresh(void);
+#define ROS_PUBLISH_MOWGLI 1
+uint8_t usb_serial_command[64];
+
+//static void WATCHDOG_vInit(void);
+//tatic void WATCHDOG_Refresh(void);
 void TIM4_Init(void);
 void HALLSTOP_Sensor_Init(void);
 
@@ -81,44 +86,68 @@ TIM_HandleTypeDef TIM4_Handle; // PWM Buzzer
 IWDG_HandleTypeDef IwdgHandle = {0};
 WWDG_HandleTypeDef WwdgHandle = {0};
 
+typedef enum {
+    DISARMED=0,
+    ARMED
+}STATE_e;
+
+
+STATE_e status = DISARMED;
+
 int main(void)
 {
   HAL_Init();
   SystemClock_Config();
 
-  __HAL_RCC_AFIO_CLK_ENABLE();
-  __HAL_RCC_PWR_CLK_ENABLE();
-
+  MX_GPIO_Init();
   MX_DMA_Init();
-  MASTER_USART_Init();
-
-  DB_TRACE("\r\n");
-  DB_TRACE("    __  ___                    ___\r\n");
-  DB_TRACE("   /  |/  /___ _      ______ _/ (_)\r\n");
-  DB_TRACE("  / /|_/ / __ \\ | /| / / __ `/ / / \r\n");
-  DB_TRACE(" / /  / / /_/ / |/ |/ / /_/ / / /  \r\n");
-  DB_TRACE("/_/  /_/\\____/|__/|__/\\__, /_/_/   \r\n");
-  DB_TRACE("                     /____/        \r\n");
-  DB_TRACE("\r\n\r\n");
-  DB_TRACE(" * Master USART (debug) initialized\r\n");
-  LED_Init();
-  DB_TRACE(" * LED initialized\r\n");
-  TIM2_Init();
-  ADC2_Init();
-  // Perimeter_vInit();
-  DB_TRACE(" * ADC1 initialized\r\n");
-  TIM3_Init();
-  HAL_TIM_PWM_Start(&TIM3_Handle, TIM_CHANNEL_4);
-  TIM4_Init();
-  HAL_TIM_PWM_Start(&TIM4_Handle, TIM_CHANNEL_3);
-  DB_TRACE(" * Timer3 (Beeper) initialized\r\n");
-  TF4_Init();
-  DB_TRACE(" * 24V switched on\r\n");
-  RAIN_Sensor_Init();
-  DB_TRACE(" * RAIN Sensor enable\r\n");
-  HALLSTOP_Sensor_Init();
-  DB_TRACE(" * HALL Sensor enabled\r\n");
+  MX_USB_DEVICE_Init();
+  MX_USART2_UART_Init();
+  MX_ADC1_Init();
+  MX_TIM2_Init();
+  MX_RTC_Init();
+  MX_USART6_UART_Init();
+  MX_TIM1_Init();
+  MX_WWDG_Init();
+  MX_TIM3_Init();
+  /* USER CODE BEGIN 2 */
+  logSerial("System Boot Completed!\n");
+  logSerial("Services Initializations started...\n");
+  memset (usb_serial_command, '\0', 64);  // clear the buffer
+  HAL_GPIO_WritePin(Led_D3_GPIO_Port, Led_D3_Pin,1);
   
+  /* init Status update variables*/
+  int cycle = 0;
+
+  /* Enable high voltage*/
+  HAL_GPIO_WritePin(High_Voltage_Enable_GPIO_Port, High_Voltage_Enable_Pin, 1);
+  logSerial("High Voltage Circuit: On\n");
+
+
+  /* Initialize Driver Motors ESC */
+  DRIVEMOTOR_Init();
+  logSerial("Driver Motors: Ready\n");
+    /* Initialize Blade Motors ESC */
+  BLADEMOTOR_Init();
+  logSerial("Blade Motor: Ready\n");
+
+  /* Initilize Charge Controler*/
+  TIM1->CCR1 = 0;  
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
+  logSerial("Charge Controler PWM Timers initialized!\n");
+
+  /* Initializing Charger*/
+  CHARGER_Init();
+
+  /* Initializing Buzzer*/
+  TIM3->CCR4 = 0;  
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+  BUZZER_SET(1);
+  HAL_Delay (500);
+  BUZZER_SET(0);
+  logSerial("Buzzer initialized!\n");
+
   if (SPIFLASH_TestDevice())
   {
     SPIFLASH_Config();
@@ -148,31 +177,13 @@ int main(void)
   IMU_TestDevice();
   IMU_Init();
   IMU_Calibrate();
-  PANEL_Init();
-  DB_TRACE(" * Panel initialized\r\n");
-  Emergency_Init();
-  DB_TRACE(" * Emergency sensors initialized\r\n");
-  TIM1_Init();
-  DB_TRACE(" * Timer1 (Charge PWM) initialized\r\n");
-  MX_USB_DEVICE_Init();
-  DB_TRACE(" * USB CDC initialized\r\n");
-
-
-// Init Drive Motors and Blade Motor
-#ifdef DRIVEMOTORS_USART_ENABLED
-  DRIVEMOTOR_Init();
-  DB_TRACE(" * Drive Motors USART initialized\r\n");
-#endif
-#ifdef BLADEMOTOR_USART_ENABLED
-  BLADEMOTOR_Init();
-#endif
-#if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC == 1)
-  ULTRASONICSENSOR_Init();
-#endif
-
-  HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, 0);
-  HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1);
-
+  EMERGENCY_Init();
+  logSerial("Services Initializations completed!\n");
+  
+  
+  //PANEL_Init();
+  //DB_TRACE(" * Panel initialized\r\n");
+ 
   // Initialize Main Timers
   NBT_init(&main_chargecontroller_nbt, 10);
   NBT_init(&main_statusled_nbt, 1000);
@@ -201,23 +212,21 @@ int main(void)
   // <chirp><chirp> means we are in the main loop
   chirp(2);
 
-  WATCHDOG_vInit();
-
   while (1)
   {
     chatter_handler();
     motors_handler();
-    panel_handler();
+    //panel_handler();
     spinOnce();
     broadcast_handler();
 
-    DRIVEMOTOR_App_Rx();
+    //DRIVEMOTOR_App_Rx();
     // Perimeter_vApp();
 
     if (NBT_handler(&main_chargecontroller_nbt))
     {
-      ADC_input();
-      ChargeController();
+      ADC_Update();
+      CHARGER_Update();
     }
     if (NBT_handler(&main_statusled_nbt))
     {
@@ -236,14 +245,15 @@ int main(void)
       ULTRASONICSENSOR_App();
     }
 #endif
+#if 0
     if (NBT_handler(&main_wdg_nbt))
     {
       WATCHDOG_Refresh();
     }
-
+#endif
     if (NBT_handler(&main_drivemotor_nbt))
     {
-      DRIVEMOTOR_App_10ms();
+      DRIVEMOTOR_Run();
     }
 
     if (NBT_handler(&main_blademotor_nbt))
@@ -252,7 +262,7 @@ int main(void)
       uint32_t currentTick;
       static uint32_t old_tick;
 
-      BLADEMOTOR_App();
+      BLADEMOTOR_Run();
 
       // DB_TRACE(" temp : %.2f \n",blade_temperature);
       currentTick = HAL_GetTick();
@@ -281,8 +291,19 @@ int main(void)
 #ifndef I_DONT_NEED_MY_FINGERS
     if (NBT_handler(&main_emergency_nbt))
     {
-      EmergencyController();
+      EMERGENCY_Update();
     }
+    cycle++;
+    if(cycle%10==0){  //100ms
+      HAL_GPIO_TogglePin (Led_D3_GPIO_Port, Led_D3_Pin);
+    }
+    if(cycle%100==0){ //1s
+       // STATE_Send();
+    }
+    if(cycle>1000){
+      cycle=1;
+    }
+    HAL_WWDG_Refresh(&hwwdg);
 #endif
   }
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -296,6 +317,7 @@ int main(void)
  */
 void MASTER_USART_Init()
 {
+#ifndef BOARD_YARDFORCE500B
   // enable port and usart clocks
   MASTER_USART_GPIO_CLK_ENABLE();
   MASTER_USART_USART_CLK_ENABLE();
@@ -303,7 +325,8 @@ void MASTER_USART_Init()
   GPIO_InitTypeDef GPIO_InitStruct;
   // RX
   GPIO_InitStruct.Pin = MASTER_USART_RX_PIN;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_INPUT;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Alternate = GPIO_AF8_USART6;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
   HAL_GPIO_Init(MASTER_USART_RX_PORT, &GPIO_InitStruct);
@@ -311,6 +334,7 @@ void MASTER_USART_Init()
   // TX
   GPIO_InitStruct.Pin = MASTER_USART_TX_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Alternate = GPIO_AF8_USART6;
   // GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
   HAL_GPIO_Init(MASTER_USART_TX_PORT, &GPIO_InitStruct);
@@ -327,7 +351,7 @@ void MASTER_USART_Init()
 
   /* UART4 DMA Init */
   /* UART4_RX Init */
-  hdma_uart4_rx.Instance = DMA2_Channel3;
+  hdma_uart4_rx.Instance = DMA2_Stream3;
   hdma_uart4_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
   hdma_uart4_rx.Init.PeriphInc = DMA_PINC_DISABLE;
   hdma_uart4_rx.Init.MemInc = DMA_MINC_ENABLE;
@@ -344,7 +368,7 @@ void MASTER_USART_Init()
 
   /* UART4 DMA Init */
   /* UART4_TX Init */
-  hdma_uart4_tx.Instance = DMA2_Channel5;
+  hdma_uart4_tx.Instance = DMA2_Stream5;
   hdma_uart4_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
   hdma_uart4_tx.Init.PeriphInc = DMA_PINC_DISABLE;
   hdma_uart4_tx.Init.MemInc = DMA_MINC_ENABLE;
@@ -364,8 +388,10 @@ void MASTER_USART_Init()
   HAL_NVIC_EnableIRQ(MASTER_USART_IRQ);
 
   __HAL_UART_ENABLE_IT(&MASTER_USART_Handler, UART_IT_TC);
+#endif
 }
 
+#if 0
 /**
  * @brief Init LED
  * @retval None
@@ -460,6 +486,11 @@ void TF4_Init()
   GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
   HAL_GPIO_Init(TF4_GPIO_PORT, &GPIO_InitStruct);
 }
+#endif
+void logSerial(uint8_t *message)
+{
+ CDC_Transmit_FS(message, strlen(message));
+}
 
 /**
  * @brief  This function is executed in case of error occurrence.
@@ -490,46 +521,47 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+
+  /** Configure the main internal regulator output voltage
+  */
+  __HAL_RCC_PWR_CLK_ENABLE();
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE | RCC_OSCILLATORTYPE_LSI;
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI
+                              |RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 72;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 3;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC | RCC_PERIPHCLK_USB | RCC_PERIPHCLK_RTC;
-  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV8;
-  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
-  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
   {
     Error_Handler();
   }
 }
-
+#if 0
 /**
  * @brief TIM3 Initialization Function
  *
@@ -604,7 +636,7 @@ void TIM3_Init(void)
 /**
  * @brief TIM4 Initialization Function
  *
- * Buzzer is on PD14 (PWM)
+ * Buzzer is on PB1 (PWM)
  *
  * @param None
  * @retval None
@@ -651,17 +683,17 @@ void TIM4_Init(void)
     Error_Handler();
   }
 
-  __HAL_AFIO_REMAP_TIM4_ENABLE(); // to use PD14 it is a full remap
+  //__HAL_AFIO_REMAP_TIM4_ENABLE(); // to use PD14 it is a full remap
 
-  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
   /**TIM4 GPIO Configuration
-  PD14    ------> TIM4_CH3
+  PB1    ------> TIM4_CH3
   */
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  GPIO_InitStruct.Pin = GPIO_PIN_14;
+  GPIO_InitStruct.Pin = GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 }
 
 /**
@@ -675,49 +707,62 @@ void MX_DMA_Init(void)
   __HAL_RCC_DMA2_CLK_ENABLE();
 
   /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMA1_Channel2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
-  /* DMA1_Channel3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
-  /* DMA1_Channel4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
-  /* DMA1_Channel5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
-  /* DMA1_Channel6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
-  /* DMA1_Channel7_IRQn interrupt configuration (DRIVE MOTORS)  */
+  /* DMA1_Stream1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
+  /* DMA1_Stream2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
+  /* DMA1_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
+  /* DMA1_Stream4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
+  /* DMA1_Stream7_IRQn interrupt configuration (DRIVE MOTORS)  */
 
-  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
-  /* DMA2_Channel3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Channel3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Channel3_IRQn);
-  /* DMA2_Channel4_5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Channel4_5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Channel4_5_IRQn);
+  HAL_NVIC_SetPriority(DMA1_Stream7_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream7_IRQn);
+  /* DMA2_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
+  /* DMA2_Stream4_5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream4_IRQn);
+  HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
 
-  /* DMA1_Channel2_IRQn interrupt configuration  (BLADE MOTOR)  */
-  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
-  /* DMA1_Channel3_IRQn interrupt configuration (BLADE MOTOR) */
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+
+  /* DMA1_Stream2_IRQn interrupt configuration  (BLADE MOTOR)  */
+  HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
+  /* DMA1_Stream3_IRQn interrupt configuration (BLADE MOTOR) */
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
 }
+#endif
 
+void BUZZER_SET(uint8_t on_off){
+
+  if (on_off)
+  {
+    TIM3->CCR4 = 10; // chirp on
+  }else{
+    TIM3->CCR4 = 0; // chirp off
+  }
+}
 /*
  * Update the states for the Emergency, Charge and Low Bat LEDs
  */
 void StatusLEDUpdate(void)
 {
-  if (Emergency_State())
+  if (EMERGENCY_State())
   {
     DB_TRACE("Emergency !");
     PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_FLASH_FAST);
@@ -727,15 +772,15 @@ void StatusLEDUpdate(void)
     PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_OFF);
   }
 
-  if (chargecontrol_is_charging == 1) // Connected to charger
+  if (charger_state == CHARGER_STATE_CONNECTED) // Connected to charger
   {
     PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_ON);
   }
-  else if (chargecontrol_is_charging == 2) // CC mode 1A
+  else if (charger_state == CHARGER_STATE_CHARGING_CC) // CC mode 1A
   {
     PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_FAST);
   }
-  else if (chargecontrol_is_charging == 3) // CV mode
+  else if (charger_state == CHARGER_STATE_CHARGING_CV) // CV mode
   {
     PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_SLOW);
   }
@@ -774,7 +819,7 @@ void msgPrint(uint8_t *msg, uint8_t msg_len)
   }
   DB_TRACE("\r\n");
 }
-
+#if 0
 /*
  * calc crc byte
  */
@@ -789,7 +834,7 @@ uint8_t crcCalc(uint8_t *msg, uint8_t msg_len)
   }
   return (crc);
 }
-
+#endif
 /*
  * 2khz chirps
  */
@@ -853,12 +898,148 @@ void MASTER_Transmit(uint8_t *buffer, uint8_t len)
   memcpy(master_tx_buffer, buffer, master_tx_buffer_len);
   HAL_UART_Transmit_DMA(&MASTER_USART_Handler, (uint8_t *)master_tx_buffer, master_tx_buffer_len); // send message via UART
 }
+#if 0
+void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
+{
+
+  if(tim_baseHandle->Instance==TIM1)
+  {
+  /* USER CODE BEGIN TIM1_MspInit 0 */
+
+  /* USER CODE END TIM1_MspInit 0 */
+    /* TIM1 clock enable */
+    __HAL_RCC_TIM1_CLK_ENABLE();
+  /* USER CODE BEGIN TIM1_MspInit 1 */
+
+  /* USER CODE END TIM1_MspInit 1 */
+  }
+  else if(tim_baseHandle->Instance==TIM3)
+  {
+  /* USER CODE BEGIN TIM3_MspInit 0 */
+
+  /* USER CODE END TIM3_MspInit 0 */
+    /* TIM3 clock enable */
+    __HAL_RCC_TIM3_CLK_ENABLE();
+  /* USER CODE BEGIN TIM3_MspInit 1 */
+
+  /* USER CODE END TIM3_MspInit 1 */
+  }
+}
+
+void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef* tim_pwmHandle)
+{
+
+  if(tim_pwmHandle->Instance==TIM2)
+  {
+  /* USER CODE BEGIN TIM2_MspInit 0 */
+
+  /* USER CODE END TIM2_MspInit 0 */
+    /* TIM2 clock enable */
+    __HAL_RCC_TIM2_CLK_ENABLE();
+  /* USER CODE BEGIN TIM2_MspInit 1 */
+
+  /* USER CODE END TIM2_MspInit 1 */
+  }
+}
+
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
+{
+
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  if(timHandle->Instance==TIM1)
+  {
+  /* USER CODE BEGIN TIM1_MspPostInit 0 */
+
+  /* USER CODE END TIM1_MspPostInit 0 */
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+    /**TIM1 GPIO Configuration
+    PE8     ------> TIM1_CH1N
+    PE9     ------> TIM1_CH1
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF1_TIM1;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN TIM1_MspPostInit 1 */
+
+  /* USER CODE END TIM1_MspPostInit 1 */
+  }
+  else if(timHandle->Instance==TIM3)
+  {
+  /* USER CODE BEGIN TIM3_MspPostInit 0 */
+
+  /* USER CODE END TIM3_MspPostInit 0 */
+
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    /**TIM3 GPIO Configuration
+    PB1     ------> TIM3_CH4
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN TIM3_MspPostInit 1 */
+
+  /* USER CODE END TIM3_MspPostInit 1 */
+  }
+
+}
+
+void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
+{
+
+  if(tim_baseHandle->Instance==TIM1)
+  {
+  /* USER CODE BEGIN TIM1_MspDeInit 0 */
+
+  /* USER CODE END TIM1_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM1_CLK_DISABLE();
+  /* USER CODE BEGIN TIM1_MspDeInit 1 */
+
+  /* USER CODE END TIM1_MspDeInit 1 */
+  }
+  else if(tim_baseHandle->Instance==TIM3)
+  {
+  /* USER CODE BEGIN TIM3_MspDeInit 0 */
+
+  /* USER CODE END TIM3_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM3_CLK_DISABLE();
+  /* USER CODE BEGIN TIM3_MspDeInit 1 */
+
+  /* USER CODE END TIM3_MspDeInit 1 */
+  }
+}
+
+void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef* tim_pwmHandle)
+{
+
+  if(tim_pwmHandle->Instance==TIM2)
+  {
+  /* USER CODE BEGIN TIM2_MspDeInit 0 */
+
+  /* USER CODE END TIM2_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM2_CLK_DISABLE();
+  /* USER CODE BEGIN TIM2_MspDeInit 1 */
+
+  /* USER CODE END TIM2_MspDeInit 1 */
+  }
+}
 
 /*
  * Initialize Watchdog - not tested yet (by Nekraus)
  */
 static void WATCHDOG_vInit(void)
 {
+  #if 0
 #if defined(DB_ACTIVE)
   /* setup DBGMCU block - stop IWDG at break in debug mode */
   __HAL_FREEZE_IWDG_DBGMCU();
@@ -920,6 +1101,7 @@ static void WATCHDOG_Refresh(void)
     DB_TRACE(" IWDG refresh error\n\r");
 #endif /* DB_ACTIVE */
   }
+  #endif
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
@@ -933,6 +1115,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
  */
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
+#ifdef MASTER_USART_INSTANCE
   if (huart->Instance == MASTER_USART_INSTANCE)
   {
     if (__HAL_USART_GET_FLAG(&MASTER_USART_Handler, USART_FLAG_TC))
@@ -940,6 +1123,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
       master_tx_busy = 0;
     }
   }
+#endif
 }
 
 void HAL_UART_TxHalfCpltCallback(UART_HandleTypeDef *huart)
@@ -954,13 +1138,15 @@ void HAL_UART_TxHalfCpltCallback(UART_HandleTypeDef *huart)
  */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+#ifdef MASTER_USART_INSTANCE
   if (huart->Instance == MASTER_USART_INSTANCE)
   {
 #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC == 1)
     ULTRASONICSENSOR_ReceiveIT();
 #endif
   }
-  else if (huart->Instance == BLADEMOTOR_USART_INSTANCE)
+#endif
+  if (huart->Instance == BLADEMOTOR_USART_INSTANCE)
   {
     BLADEMOTOR_ReceiveIT();
   }
@@ -969,3 +1155,4 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     DRIVEMOTOR_ReceiveIT();
   }
 }
+#endif

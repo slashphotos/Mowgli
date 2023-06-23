@@ -90,7 +90,7 @@ void Perimeter_vInit(void){
     /** Common config
      */
     ADC_Handle.Instance = ADC1;
-    ADC_Handle.Init.ScanConvMode = ADC_SCAN_DISABLE;
+    ADC_Handle.Init.ScanConvMode = DISABLE;
     ADC_Handle.Init.ContinuousConvMode = ENABLE;
     ADC_Handle.Init.DiscontinuousConvMode = DISABLE;
     ADC_Handle.Init.ExternalTrigConv = ADC_EXTERNALTRIG_EDGE_NONE;
@@ -102,8 +102,8 @@ void Perimeter_vInit(void){
     }
 
     sConfig.Channel = ADC_CHANNEL_6; // PA6 Perimeter sense
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_71CYCLES_5; /* 28 µs with the adc clock to 9mhz */
+    sConfig.Rank = 1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES; /* 28 µs with the adc clock to 9mhz */
     if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
     {
        Error_Handler();
@@ -112,7 +112,7 @@ void Perimeter_vInit(void){
     /* ADC DMA Init */
     /* ADC Init */
 
-    hdma_adc.Instance = DMA1_Channel1;
+    hdma_adc.Instance = DMA1_Stream1;
     hdma_adc.Init.Direction = DMA_PERIPH_TO_MEMORY;
     hdma_adc.Init.PeriphInc = DMA_PINC_DISABLE;
     hdma_adc.Init.MemInc = DMA_MINC_ENABLE;
@@ -128,7 +128,8 @@ void Perimeter_vInit(void){
    __HAL_LINKDMA(&ADC_Handle,DMA_Handle,hdma_adc);
 
   // calibrate  - important for accuracy !
-  HAL_ADCEx_Calibration_Start(&ADC_Handle); 
+  //not needed on f4
+  //HAL_ADCEx_Calibration_Start(&ADC_Handle); 
 
   perimeter_bFlagIT = false;
   idxCoil = COIL_MAX;

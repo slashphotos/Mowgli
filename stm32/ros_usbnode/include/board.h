@@ -18,8 +18,9 @@ extern "C"
  * BOARD SELECTION
  * the specific board setting are set a the end of this file
  ********************************************************************************/
- //#define BOARD_YARDFORCE500 1
-#define BOARD_LUV1000RI 1
+//#define BOARD_YARDFORCE500 1
+#define BOARD_YARDFORCE500B 1
+//#define BOARD_LUV1000RI 1
 
 //#define IMU_ALTIMU 
 #define IMU_WT901 1
@@ -38,7 +39,7 @@ extern "C"
 #define PANEL_TYPE_YARDFORCE_LUV1000RI 2
 #define PANEL_TYPE_YARDFORCE_900_ECO 3
 
-#if defined(BOARD_YARDFORCE500)
+#if defined(BOARD_YARDFORCE500) || defined(BOARD_YARDFORCE500B)
 #define PANEL_TYPE PANEL_TYPE_YARDFORCE_500_CLASSIC
 #define BLADEMOTOR_LENGTH_RECEIVED_MSG 16
 #define DEBUG_TYPE 0
@@ -65,9 +66,9 @@ extern "C"
 // #define I_DONT_NEED_MY_FINGERS              1      // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
 
 /// nominal max charge current is 1.0 Amp
-#define MAX_CHARGE_CURRENT 1.5f
+#define MAX_CHARGE_CURRENT 1.0f
 /// limite voltag when switching in 150mA mode
-#define LIMIT_VOLTAGE_150MA 29.0f
+#define LIMIT_VOLTAGE_150MA 28.0f
 /// Max voltage allowed 29.4
 #define MAX_CHARGE_VOLTAGE 29.0f
 /// We consider the battery is full when in CV mode the current below 0.1A
@@ -95,9 +96,11 @@ extern "C"
 #define IMU_ACCELERATION 1 // external IMU
 #define IMU_ANGULAR 1      // external IMU
 
+// don't use MASTER_USART on YF 500B
+#ifndef BOARD_YARDFORCE500B
 // we use J18 (Red 9 pin connector as Master Serial Port)
 #define MASTER_J18 1
-
+#endif
 // enable Drive and Blade Motor UARTS
 #define DRIVEMOTORS_USART_ENABLED 1
 #define BLADEMOTOR_USART_ENABLED 1
@@ -161,7 +164,7 @@ extern "C"
 #define WHEEL_LIFT_RED_PORT GPIOD
 
 /* Play button - (LOW when pressed) */
-#define PLAY_BUTTON_PIN GPIO_PIN_7
+#define PLAY_BUTTON_PIN GPIO_PIN_9
 #define PLAY_BUTTON_PORT GPIOC
 #define PLAY_BUTTON_GPIO_CLK_ENABLE() __HAL_RCC_GPIOC_CLK_ENABLE()
 
@@ -196,14 +199,14 @@ extern "C"
 #endif
 #ifdef MASTER_J18
 /* UART4 (J18 Pin 7 (TX) Pin 8 (RX)) */
-#define MASTER_USART_INSTANCE UART4
-#define MASTER_USART_RX_PIN GPIO_PIN_11
+#define MASTER_USART_INSTANCE USART6
+#define MASTER_USART_RX_PIN GPIO_PIN_7
 #define MASTER_USART_RX_PORT GPIOC
-#define MASTER_USART_TX_PIN GPIO_PIN_10
+#define MASTER_USART_TX_PIN GPIO_PIN_6
 #define MASTER_USART_TX_PORT GPIOC
 #define MASTER_USART_GPIO_CLK_ENABLE() __HAL_RCC_GPIOC_CLK_ENABLE()
-#define MASTER_USART_USART_CLK_ENABLE() __HAL_RCC_UART4_CLK_ENABLE()
-#define MASTER_USART_IRQ UART4_IRQn
+#define MASTER_USART_USART_CLK_ENABLE() __HAL_RCC_USART6_CLK_ENABLE()
+#define MASTER_USART_IRQ USART6_IRQn
 #endif
 
 #ifdef DRIVEMOTORS_USART_ENABLED
@@ -225,16 +228,16 @@ extern "C"
 
 #ifdef BLADEMOTOR_USART_ENABLED
 /* blade motor PAC 5223 (USART3) */
-#define BLADEMOTOR_USART_INSTANCE USART3
+#define BLADEMOTOR_USART_INSTANCE USART6
 
-#define BLADEMOTOR_USART_RX_PIN GPIO_PIN_11
-#define BLADEMOTOR_USART_RX_PORT GPIOB
+#define BLADEMOTOR_USART_RX_PIN GPIO_PIN_7
+#define BLADEMOTOR_USART_RX_PORT GPIOC
 
-#define BLADEMOTOR_USART_TX_PIN GPIO_PIN_10
-#define BLADEMOTOR_USART_TX_PORT GPIOB
+#define BLADEMOTOR_USART_TX_PIN GPIO_PIN_6
+#define BLADEMOTOR_USART_TX_PORT GPIOC
 
-#define BLADEMOTOR_USART_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
-#define BLADEMOTOR_USART_USART_CLK_ENABLE() __HAL_RCC_USART3_CLK_ENABLE()
+#define BLADEMOTOR_USART_GPIO_CLK_ENABLE() __HAL_RCC_GPIOC_CLK_ENABLE()
+#define BLADEMOTOR_USART_USART_CLK_ENABLE() __HAL_RCC_USART6_CLK_ENABLE()
 #endif
 
 #ifdef PANEL_USART_ENABLED

@@ -2,7 +2,7 @@
 #define _STM32_HARDWARE_H_
 
 #include "main.h"
-#include "stm32f1xx_hal.h"
+#include "stm32f4xx_hal.h"
 #include "usbd_cdc_if.h"
 #include "ringbuffer.h"
 
@@ -38,7 +38,7 @@ public:
 	void write(uint8_t* data, int length)
 	{		
 		//while (hcdc->TxState != 0);
-		CDC_Transmit(data, length); 	// queue data for sending
+		CDC_Transmit_FS(data, length); 	// queue data for sending
 		//debug_printf("post send no longer busy !!!!!\r\n");
 	}
 

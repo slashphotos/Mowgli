@@ -1,59 +1,32 @@
-/****************************************************************************
-* Title                 :   Blade motor driver
-* Filename              :   blademotor.h
-* Author                :   Nekraus
-* Origin Date           :   17/08/2022
-* Version               :   1.0.0
-
-*****************************************************************************/
-/** \file blademotor.h
-*  \brief 
-*
-*/
 #ifndef __BLADEMOTOR_H
 #define __BLADEMOTOR_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-/******************************************************************************
-* Includes
-*******************************************************************************/
+
+
 #include <stdbool.h>
 
-/******************************************************************************
-* Preprocessor Constants
-*******************************************************************************/
+#define BLADEMOTOR_LENGTH_RECEIVED_MSG 16
 
-/******************************************************************************
-* Constants
-*******************************************************************************/
+typedef enum {
+    BLADEMOTOR_INIT_1=0,
+    BLADEMOTOR_INIT_2,
+    BLADEMOTOR_RUN_IDLE,
+    BLADEMOTOR_RUN_ARMED
+}BLADEMOTOR_STATE_e;
 
-/******************************************************************************
-* Macros
-*******************************************************************************/
-
-/******************************************************************************
-* Typedefs
-*******************************************************************************/
-
-/******************************************************************************
-* Variables
-*******************************************************************************/
-// global variables used by ROS
-extern bool BLADEMOTOR_bActivated;
+extern  BLADEMOTOR_STATE_e blademotor_eState;
 extern uint16_t BLADEMOTOR_u16RPM;
 extern uint16_t BLADEMOTOR_u16Power;
-extern uint32_t BLADEMOTOR_u32Error;
-/******************************************************************************
-* PUBLIC Function Prototypes
-*******************************************************************************/
 
 void BLADEMOTOR_Init(void);
-void BLADEMOTOR_App(void);
-void BLADEMOTOR_ReceiveIT(void);
-
+void BLADEMOTOR_Run(void);
+void BLADEMOTOR_UART_RxCallback(void);
 void BLADEMOTOR_Set(uint8_t on_off);
+
+
 
 
 #ifdef __cplusplus
@@ -61,5 +34,3 @@ void BLADEMOTOR_Set(uint8_t on_off);
 #endif
 
 #endif /*BLADEMOTOR_H*/ 
-
-/*** End of File **************************************************************/

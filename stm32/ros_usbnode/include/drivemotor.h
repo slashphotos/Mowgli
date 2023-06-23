@@ -1,69 +1,53 @@
-/****************************************************************************
-* Title                 :   drive motor module
-* Filename              :   drivemotor.h
-* Author                :   Nekraus
-* Origin Date           :   18/08/2022
-* Version               :   1.0.0
 
-*****************************************************************************/
-/** \file drivemotor.h
-*  \brief 
-*
-*/
 #ifndef __DRIVEMOTOR_H
 #define __DRIVEMOTOR_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-/******************************************************************************
-* Includes
-*******************************************************************************/
 
-/******************************************************************************
-* Preprocessor Constants
-*******************************************************************************/
+#include <stdint.h>
 
-/******************************************************************************
-* Constants
-*******************************************************************************/
-
-/******************************************************************************
-* Macros
-*******************************************************************************/
-
-/******************************************************************************
-* Typedefs
-*******************************************************************************/
-
-/******************************************************************************
-* Variables
-*******************************************************************************/
-
-extern int16_t   right_wheel_speed_val;
-extern int16_t   left_wheel_speed_val;
+extern int16_t    right_wheel_speed_val;
+extern int16_t    left_wheel_speed_val;
 extern uint32_t   right_encoder_ticks;  // accumulating
 extern uint32_t   left_encoder_ticks;   // accumulating 
-extern uint16_t  right_encoder_val;    // non accumulating 
-extern uint16_t  left_encoder_val;     // non accumulating 
-extern uint8_t   right_power;
-extern uint8_t   left_power;
-extern uint32_t  DRIVEMOTOR_u32ErrorCnt;
+extern uint16_t   right_encoder_val;    // non accumulating 
+extern uint16_t   left_encoder_val;     // non accumulating 
+extern uint8_t    right_power;
+extern uint8_t    left_power;
+extern uint32_t   DRIVEMOTOR_u32ErrorCnt;
 
 
-/******************************************************************************
-* PUBLIC Function Prototypes
-*******************************************************************************/
+
+
+typedef enum {
+    RX_WAIT,
+    RX_VALID,
+    RX_CRC_ERROR,
+    RX_INVALID_ERROR,
+    RX_TIMEOUT_ERROR,
+}rx_status_e;
+
+
+#define MAX_MPS 0.5		  // Allow maximum speed of 0.5 m/s
+#define PWM_PER_MPS 300.0 // PWM value of 300 means 1 m/s bot speed
+
+#define TICKS_PER_M 300.0 // Motor Encoder ticks per meter
+
+// #define WHEEL_BASE  0.325		// The distance between the center of the wheels in meters
+#define WHEEL_BASE 0.285   // The distance between the center of the wheels in meters
+#define WHEEL_DIAMETER 0.2 // The diameter of the wheels in meters
+
+
 
 void DRIVEMOTOR_Init(void);
-void DRIVEMOTOR_App_10ms(void);
-void DRIVEMOTOR_App_Rx(void);
-void DRIVEMOTOR_ReceiveIT(void);
-void DRIVEMOTOR_SetSpeed(uint8_t left_speed, uint8_t right_speed, uint8_t left_dir, uint8_t right_dir);
+void DRIVEMOTOR_Run(void);
+void DRIVEMOTOR_Receive(void);
+void DRIVEMOTOR_UART_RxCallback(void);
+void DRIVEMOTOR_SetSpeed(float left_mps, float right_mps);
 
 #ifdef __cplusplus
 }
 #endif
 #endif /*__DRIVEMOTOR_H*/ 
-
-/*** End of File **************************************************************/

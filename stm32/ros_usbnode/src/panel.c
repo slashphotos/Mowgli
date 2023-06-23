@@ -13,8 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "stm32f1xx_hal.h"
-#include "stm32f1xx_hal_uart.h"
+#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_uart.h"
 
 #include "panel.h"
 #include "board.h"
@@ -87,7 +87,8 @@ void PANEL_Init(void)
 
     // RX
     GPIO_InitStruct.Pin = PANEL_USART_RX_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_INPUT;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(PANEL_USART_RX_PORT, &GPIO_InitStruct);
@@ -95,6 +96,7 @@ void PANEL_Init(void)
     // TX
     GPIO_InitStruct.Pin = PANEL_USART_TX_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(PANEL_USART_TX_PORT, &GPIO_InitStruct);
 
@@ -113,7 +115,7 @@ void PANEL_Init(void)
     
     /* UART1 DMA Init */
     /* UART1_RX Init */    
-    hdma_uart1_rx.Instance = DMA1_Channel5;
+    hdma_uart1_rx.Instance = DMA1_Stream5;
     hdma_uart1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
     hdma_uart1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
     hdma_uart1_rx.Init.MemInc = DMA_MINC_ENABLE;
@@ -130,7 +132,7 @@ void PANEL_Init(void)
     
     /* UART4 DMA Init */
     /* UART4_TX Init */
-    hdma_uart1_tx.Instance = DMA1_Channel4;
+    hdma_uart1_tx.Instance = DMA1_Stream4;
     hdma_uart1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
     hdma_uart1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
     hdma_uart1_tx.Init.MemInc = DMA_MINC_ENABLE;
