@@ -2,6 +2,12 @@
 # WARNING WIP DO NOT USE ON YOUR MOWER!
 This repo merges https://github.com/Nekraus/Mowgli and https://github.com/theely/B005CSerial to port Mowgli to the new YardForce Classic 500**B** mower.
 
+# TODO:
+- **add charging** 
+- cleanup
+- add panel communication
+- add MPU6050 support
+  
 # Mowgli
 
 <img src="./images/gforce.jpg" width="60%"/>
